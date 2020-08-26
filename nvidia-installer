@@ -1,0 +1,168 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+#TeArch Linux Nvidia Installer
+
+import argparse
+import os
+import time
+
+#Update Mirrors and Packages
+def updateSystem():
+    os.system("sudo pacman -Syyu")
+
+#Install Nvidia Propreitary Drivers
+def installNvidiaPropreitaryDrivers():
+    os.system("sudo pacman -S nvidia nvidia-utils nvidia-settings xorg-server-devel opencl-nvidia lib32-nvidia-utils")
+
+#Install Nvidia Vulkan Drivers
+def installNvidiaVulkanDrivers():
+    os.system("sudo pacman -S giflib lib32-giflib libpng lib32-libpng libldap lib32-libldap gnutls lib32-gnutls mpg123 lib32-mpg123 openal lib32-openal v4l-utils lib32-v4l-utils libpulse lib32-libpulse libgpg-error lib32-libgpg-error alsa-plugins lib32-alsa-plugin alsa-lib lib32-alsa-lib libjpeg-turbo lib32-libjpeg-turbo sqlite lib32-sqlite libxcomposite lib32-libxcomposite libxinerama lib32-libgcrypt libgcrypt lib32-libxinerama ncurses lib32-ncurses opencl-icd-loader lib32-opencl-icd-loader libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader")
+
+#Blacklist Nouveau
+def blacklistNouveau():
+    if not os.path.isfile("/usr/lib/modprobe.d/nvidia.conf"):
+       file = open("/usr/lib/modprobe.d/nvidia.conf")
+       file.write("blacklist nouveau")
+       file.close()
+
+#X Configure
+def xConfigure():
+    os.system("X -configure") 
+
+#Install Optimus Manager
+def installOptimusManager():
+    os.system("git clone https://aur.archlinux.org/optimus-manager.git && cd optimus-manager && makepkg -si")
+    os.system("git clone https://aur.archlinux.org/optimus-manager-qt.git && cd optimus-manager-qt && makepkg -si")
+
+    os.system("sudo systemctl disable bumblebeed.service")
+    os.system("sudo systemctl enable optimus-manager")
+
+#Create "20-nvidia.conf" file
+def createNvidiaFile():
+    if not os.path.isfile("/etc/X11/xorg.conf.d/20-nvidia.conf"):
+       file = open("/etc/X11/xorg.conf.d/20-nvidia.conf")
+       file.write("""
+        Section "Device"
+              Identifier "Nvidia Card"
+              Driver "nvidia"
+              VendorName "NVIDIA Corporation"
+              BoardName "NVIDIA GeForce"
+        EndSection""")
+       file.close()
+
+#Create "20-intel.conf" file
+def createIntelFile():
+    if not os.path.isfile("/etc/X11/xorg.conf.d/20-intel.conf"):
+       file = open("/etc/X11/xorg.conf.d/20-intel.conf")
+       file.write("""
+        Section "Device"
+              Identifier   "Intel Graphics"
+              Driver       "intel"
+        EndSection""")
+       file.close()
+
+#Parser
+def parse_options():
+    """ Parse command line options """
+    desc = "TeArch Linux Nvidia Installer v0.3"
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument(
+        "-u", "--update",
+        help="Update system and mirrors.",
+        action='store_true')
+
+    parser.add_argument(
+        "-v", "--vulkan",
+        help="Install Nvidia vulkan drivers.",
+        action="store_true")
+
+    parser.add_argument(
+        "-o", "--optimus",
+        help="Install Optimus Manager and Optimus Manager QT.",
+        action="store_true")
+
+    parser.add_argument(
+        "-i", "--intel",
+        help="Create Intel configuration file.",
+        action="store_true")
+
+    parser.add_argument(
+        "-t", "--test",
+        help="Test mode. Nothing in your system will be modified",
+        action="store_true")
+
+
+    return parser.parse_args()
+
+
+def main():
+    # Main Program
+    cmd_line = parse_options()
+
+    global TEST
+    TEST = cmd_line.test
+
+    print("""###Welcome to the TeArch Linux Nvidia Installer###
+    - For update system and mirrors use "-u" argument.
+    - For install Nvidia vulkan drivers  use "-v" argument.
+    - For install Optimus Manager use "-o" argument.
+    - For test use "-t" argument.
+    - For create Intel configuration use "-i" argument.
+
+    Note: If you want use Optimus manager, you must use LightDM or Sddm.
+    """)
+
+    if not TEST and os.getuid() != 0:
+        print("This installer must be run with administrative privileges (use sudo)")
+        return
+
+    if TEST and os.getuid() == 0:
+        print("Do not run this installer in test mode with administrative privileges")
+        return
+
+
+    #Update System
+    if cmd_line.update:
+        print("Updating system...")
+        updateSystem()
+    
+    #Install Nvidia Drivers
+    print("Installing Nvidia drivers...")
+    installNvidiaPropreitaryDrivers()
+
+    #Install Nvidia Vulkan Drivers
+    if cmd_line.vulkan:
+        print("Installing Nvidia vulkan drivers...")
+        installNvidiaVulkanDrivers()
+
+    #Blacklist Nouveau
+    print("Blacklisting Nouveau...")
+    blacklistNouveau()
+
+    #Create Nvidia Configuration File
+    print("Creating Nvidia configuration file...")
+    createNvidiaFile()
+
+    #Create Intel Configuration File
+    if cmd_line.intel:
+        print("Creating Intel configuration file...")
+        createIntelFile()
+
+    #X server Configure
+    print("X server Configuring...")
+    xConfigure()
+
+    #Install Optimus Manager
+    if cmd_line.optimus:
+        print("Installing Optimus Manager and Optimus Manager QT...")
+        installOptimusManager()
+
+    print("System will reboot in 10 seconds.")
+    time.sleep(10)
+    os.system('reboot')
+
+    
+if __name__ == "__main__":
+    main()
